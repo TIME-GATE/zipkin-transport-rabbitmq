@@ -1,0 +1,26 @@
+{
+  "name": "zipkin-transport-rabbitmq",
+  "version": "0.16.0",
+  "description": "Transports Zipkin trace data via Rabbitmq to the collector",
+  "main": "lib/index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "babel src -d lib",
+    "test": "mocha --exit --require ../../test/helper.js",
+    "prepublish": "npm run build"
+  },
+  "author": "Openzipkin <openzipkin.alt@gmail.com>",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/openzipkin/zipkin-js",
+  "dependencies": {
+    "amqplib": "^0.5.3",
+    "zipkin-encoder-thrift": "^0.16.0"
+  },
+  "devDependencies": {
+    "@babel/cli": "7.1.5",
+    "@babel/core": "7.1.5",
+    "mocha": "^5.2.0",
+    "thrift": "^0.11.0",
+    "zipkin": "^0.16.0"
+  }
+}
