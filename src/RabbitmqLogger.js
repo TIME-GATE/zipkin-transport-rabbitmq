@@ -5,10 +5,9 @@ module.exports = class RabbitmqLogger {
   constructor(options, log = console) {
     this.client = amqp(options);
     this.log = log;
-
   }
 
-  async logSpan(config, span) {
+  async logSpan(span, config) {
 
     /* if not bind queue */
     await amqp.bindQueue(

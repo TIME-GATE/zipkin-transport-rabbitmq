@@ -1,56 +1,65 @@
+/* wrap consume & produce only */
 const {Annotation, InetAddress} = require('zipkin');
 
 module.exports = function zipkinClient(
   tracer,
   Rabbitmq,
+  options,
   serviceName = tracer.localEndpoint.serviceName,
   remoteServiceName = 'rabbitmq'
 ) {
-  function annotateSuccess(id) {
-    tracer.letId(id, () => {
-      tracer.recordAnnotation(new Annotation.ClientRecv());
-    });
-  }
-
-  function annotateError(id, error) {
-    tracer.letId(id, () => {
-      tracer.recordBinary('error', error.toString());
-      tracer.recordAnnotation(new Annotation.ClientRecv());
-    });
-  }
-
+  const sa = {
+    serviceName: remoteServiceName,
+    host: new InetAddress(options.host),
+    port: options.port
+  };
   function mkZipkinCallback(callback, id) {
+    const originalId = tracer.id;
     return function zipkinCallback(...args) {
-      if (args[0]) {
-        annotateError(id, args[0]);
-      } else {
-        annotateSuccess(id);
-      }
-      callback.apply(this, args);
+      tracer.letId(id, () => {
+        tracer.recordAnnotation(new Annotation.ClientRecv());
+      });
+      // callback runs after the client request, so let's restore the former ID
+      tracer.letId(originalId, () => {
+        callback.apply(this, args);
+      });
     };
   }
-
-  class ZipkinRabbitmq extends Rabbitmq {}
-
-  const actualFn = ZipkinRabbitmq.prototype.consume;
-
-  ZipkinRabbitmq.prototype.consume = function(quName, cb, options = {noAck: true}) {
-    const id = tracer.createChildId();
-    tracer.letId(id, () => {
-      tracer.recordAnnotation(new Annotation.ClientSend());
-      tracer.recordAnnotation(new Annotation.ServiceName(serviceName));
-      tracer.recordAnnotation(new Annotation.ServerAddr({
-        serviceName: remoteServiceName,
-        host: new InetAddress(this.host),
-        port: this.port
-      }));
-      tracer.recordRpc(`query ${this.database}`);
-    });
-
-    const consume = actualFn.call(this, quName, mkZipkinCallback(cb, id), options);
-
-    return consume;
+  function commonAnnotations(rpc) {
+    tracer.recordRpc(rpc);
+    tracer.recordAnnotation(new Annotation.ServiceName(serviceName));
+    tracer.recordAnnotation(new Annotation.ServerAddr(sa));
+    tracer.recordAnnotation(new Annotation.ClientSend());
   }
 
-  return ZipkinRabbitmq;
+  const rabbitmqClient = Rabbitmq(options);
+  const methodsToWrap = ['consume', 'produce'];
+  
+  const wrap = function(client, traceId) {
+    const clientNeedsToBeModified = client;
+    
+    methodsToWrap.forEach((method) => {
+
+      const actualFn = clientNeedsToBeModified[method];
+
+      clientNeedsToBeModified[method] = function(...args) {
+        const callback = method === 'consume' 
+          ? args[1] 
+          : () => { console.log('do nothing') };
+
+        const id = traceId || tracer.createChildId();
+        tracer.letId(id, () => {
+          commonAnnotations(method);
+        });
+
+        const wrapper = mkZipkinCallback(callback, id);
+        const newArgs = [...args, wrapper];
+
+        actualFn.apply(this, newArgs);
+      };
+    });
+  };
+
+  wrap(rabbitmqClient);
+  return rabbitmqClient;
 }

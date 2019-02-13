@@ -36,10 +36,33 @@ const tracer = new Tracer({
   localServiceName,
 });
 
-const zipkinRabbitmq = wrapRabbitmq(amqp, tracer);
+const zipkinRabbitmq = wrapRabbitmq(amqp, tracer, conectionOptions);
 
-zipkinRabbitmq.consume('demo-queue', (msg) => {
-  console.log(`mq message to zipkin ${msg}`)
-},{ noAck: false},
-);
+async function mqFn(config) {
+  /* bing queue */
+  await amqp.bindQueue(
+    config.exchangeName,
+    config.queueName,
+    config.routingKey
+  );
+
+  /* produce */
+  await amqp.produce(
+    config.exchangeName,
+    config.routingKey,
+    new Buffer(JSON.stringify({msg: 'hello zipkin'}))
+  );
+
+  /* consume */
+  await amqp.consume(
+    config.queueName,
+    (msg) => { console.log(mgs) },
+  );
+}
+
+mqFn({
+  exchangeName: 'demo-exchange',
+  queueName: 'demo-queue',
+  routingKey: 'demo-routing',
+})
 ```

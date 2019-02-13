@@ -1,0 +1,11 @@
+node_modules
+lib
+es
+dist
+npm-debug.log
+lerna-debug.log
+yarn-error.log
+packages/**/package-lock.json
+**/test-types/*.test.js
+**/tsr-declarations.js
+.idea/
